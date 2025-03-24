@@ -4,17 +4,13 @@ import { Inputs, AI } from "../AI";
 import Barrel from "../Tank/Barrel";
 import TankDefinitions from "../../Const/TankDefinitions";
 
-// ArenaCloserクラスの定義
 class ArenaCloser extends TankBody {
-  // 静的プロパティに型を付与
   private static BASE_SIZE: number = 85;
 
-  // インスタンスプロパティに型を付与
   private ai: AI;
-  private inputs: Inputs;
+  public inputs: Inputs;
   private camera: CameraEntity;
 
-  // コンストラクタの引数に型を付与
   constructor(arena, pTankId = null) {
     let tankId: number;
     if (pTankId === null) {
@@ -33,10 +29,8 @@ class ArenaCloser extends TankBody {
     const inputs = new Inputs();
     const camera = new CameraEntity(arena);
 
-    // camera.setLevelをオーバーライド（仮に型を指定）
     camera.setLevel = (level: number) => {};
 
-    // プロパティのオーバーライド
     Object.defineProperty(camera.cameraData, "score", {
       get: () => 0,
       set: () => {},
@@ -50,7 +44,6 @@ class ArenaCloser extends TankBody {
 
     camera.sizeFactor = ArenaCloser.BASE_SIZE / 50;
 
-    // 親クラスのコンストラクタを呼び出し
     super(arena, camera, inputs);
 
     this.ai = new AI(this);
@@ -58,7 +51,6 @@ class ArenaCloser extends TankBody {
     this.ai.viewRange = Infinity;
     this.setTank(tankId);
 
-    // definitionオブジェクトに型がないためanyを仮定
     this.definition = {
       ...this.definition,
       maxHealth: 3,
@@ -81,12 +73,10 @@ class ArenaCloser extends TankBody {
     this.setInvulnerability(false);
     this.ai.aimSpeed = 1.4;
 
-    // インスタンスプロパティに値を設定
     this.inputs = inputs;
     this.camera = camera;
   }
 
-  // tickメソッドに型を付与
   public tick(tick: number): void {
     this.ai.movementSpeed = this.cameraEntity.cameraData.values.movementSpeed * 10;
     this.inputs = this.ai.inputs;
