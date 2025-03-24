@@ -1,105 +1,94 @@
+/*
+    DiepCustom - custom tank game server that shares diep.io's WebSocket protocol
+    Copyright (C) 2022 ABCxFF (github.com/ABCxFF)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published
+    by the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program. If not, see <https://www.gnu.org/licenses/>
+*/
+
+import GameServer from "../../Game";
 import TankBody from "../Tank/TankBody";
+
+import { Color, PhysicsFlags, PositionFlags, Stat, Tank } from "../../Const/Enums";
 import { CameraEntity } from "../../Native/Camera";
-import { Inputs, AI } from "../AI";
-import Barrel from "../Tank/Barrel";
-import TankDefinitions from "../../Const/TankDefinitions";
+import { AI, AIState, Inputs } from "../AI";
 
-class ArenaCloser extends TankBody {
-  private static BASE_SIZE: number = 85;
+/**
+ * Represents the Arena Closers that end the game.
+ */
+export default class ArenaCloser extends TankBody {
+    /** Size of a level 0 Arena Closer. */
+    public static BASE_SIZE = 175;
+    
+    /** The AI that controls how the AC moves. */
+    public ai: AI;
 
-  private ai: AI;
-  public inputs: Inputs;
-  private camera: CameraEntity;
+    public constructor(game: GameServer) {
+        const inputs = new Inputs();
+        const camera = new CameraEntity(game);
 
-  constructor(arena, pTankId = null) {
-    let tankId: number;
-    if (pTankId === null) {
-      const r = Math.random();
-      if (r < 0.33) {
-        tankId = 16;
-      } else if (r < 0.66) {
-        tankId = 16;
-      } else {
-        tankId = 16;
-      }
-    } else {
-      tankId = pTankId;
+        const setLevel = camera.setLevel;
+        camera.setLevel = function(level) {
+            setLevel.call(this, level);
+
+            this.sizeFactor *= (ArenaCloser.BASE_SIZE / 50);
+        }
+        camera.sizeFactor = (ArenaCloser.BASE_SIZE / 50);
+
+        super(game, camera, inputs);
+
+        this.relationsData.values.team = game.arena;
+
+        this.ai = new AI(this);
+        this.ai.inputs = inputs;
+        this.ai.viewRange = Infinity;
+
+        this.setTank(Tank.ArenaCloser);
+
+        const def = (this.definition = Object.assign({}, this.definition));
+        def.maxHealth = 10000;
+        // TODO(ABC):
+        // Fix all the stats
+        def.speed = 1;
+
+        this.damagePerTick = 200;
+
+        this.nameData.values.name = "Arena Closer";
+        this.styleData.values.color = Color.Neutral;
+        this.positionData.values.flags |= PositionFlags.canMoveThroughWalls;
+        this.physicsData.values.flags |= PhysicsFlags.canEscapeArena;
+        camera.cameraData.values.player = this;
+
+        for (let i = Stat.MovementSpeed; i < Stat.BodyDamage; ++i) camera.cameraData.values.statLevels.values[i] = 7;
+
+        this.ai.aimSpeed = this.barrels[0].bulletAccel * 1.6;
+        this.setInvulnerability(true);
     }
 
-    const inputs = new Inputs();
-    const camera = new CameraEntity(arena);
+    public tick(tick: number) {
+        this.ai.movementSpeed = this.cameraEntity.cameraData.values.movementSpeed * 10;
 
-    camera.setLevel = (level: number) => {};
+        this.inputs = this.ai.inputs;
 
-    Object.defineProperty(camera.cameraData, "score", {
-      get: () => 0,
-      set: () => {},
-      configurable: true,
-    });
-    Object.defineProperty(camera.cameraData.values, "score", {
-      get: () => 0,
-      set: () => {},
-      configurable: true,
-    });
+        if (this.ai.state === AIState.idle) {
+            const angle = this.positionData.values.angle + this.ai.passiveRotation;
+            const mag = Math.sqrt((this.inputs.mouse.x - this.positionData.values.x) ** 2 + (this.inputs.mouse.y - this.positionData.values.y) ** 2);
+            this.inputs.mouse.set({
+                x: this.positionData.values.x + Math.cos(angle) * mag,
+                y: this.positionData.values.y + Math.sin(angle) * mag
+            });
+        }
 
-    camera.sizeFactor = ArenaCloser.BASE_SIZE / 50;
-
-    super(arena, camera, inputs);
-
-    this.ai = new AI(this);
-    this.ai.inputs = inputs;
-    this.ai.viewRange = Infinity;
-    this.setTank(tankId);
-
-    this.definition = {
-      ...this.definition,
-      maxHealth: 3,
-      speed: 0.76,
-    };
-    this.relationsData.values.team = this.game.arena;
-    this.damagePerTick = 20;
-    this.nameData.values.name = "Arena Closer";
-    this.styleData.values.color = 12;
-    this.positionData.values.flags |= 0;
-    this.physicsData.values.flags |= 0;
-
-    camera.cameraData.values.player = this;
-
-    for (let i = 0; i < 5; i++) {
-      camera.cameraData.values.statLevels.values[i] = 7;
+        super.tick(tick);
     }
-
-    this.physicsData.values.absorbtionFactor = 1;
-    this.setInvulnerability(false);
-    this.ai.aimSpeed = 1.4;
-
-    this.inputs = inputs;
-    this.camera = camera;
-  }
-
-  public tick(tick: number): void {
-    this.ai.movementSpeed = this.cameraEntity.cameraData.values.movementSpeed * 10;
-    this.inputs = this.ai.inputs;
-
-    if (this.ai.state === 0) {
-      const angle = this.positionData.values.angle + this.ai.passiveRotation;
-      const dx = this.inputs.mouse.x - this.positionData.values.x;
-      const dy = this.inputs.mouse.y - this.positionData.values.y;
-      const mag = Math.sqrt(dx * dx + dy * dy);
-      this.inputs.mouse.set({
-        x: this.positionData.values.x + Math.cos(angle) * mag,
-        y: this.positionData.values.y + Math.sin(angle) * mag,
-      });
-    }
-
-    super.tick(tick);
-
-    const player = this.cameraEntity.cameraData.values.player;
-    if (player && player.scoreData && player instanceof TankBody) {
-      player.scoreData.score = 0;
-      player.scoreReward = 0;
-    }
-  }
 }
-
-export default ArenaCloser;
